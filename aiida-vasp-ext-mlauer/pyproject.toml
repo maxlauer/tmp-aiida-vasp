@@ -1,0 +1,30 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+[tool.poetry]
+name = "aiida_vasp_ext_mlauer"
+version = "0.0.1"
+description = "AiiDA-VASP Extensions of Maximilian Lauer"
+authors = ["Maximilian Lauer <Maximilian.Lauer@uni-giessen.de>"]
+license = "MIT"
+keywords = ["aiida", "VASP"]
+
+
+[tool.poetry.dependencies]
+python = "^3.12"
+numpy = ">=1.26.4"
+pymatgen = ">=2024.10.3"
+aiida-core = ">=2.6.2"
+aiida-vasp = ">=3.1.1"
+
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.0"
+
+
+# AIIDA Entry Points 
+[tool.poetry.plugins."aiida.workflows"]
+"vasp_ext_ml.eos" = "aiida_vasp_ext_mlauer.workflows.eos:EoSWorkChain"
+
