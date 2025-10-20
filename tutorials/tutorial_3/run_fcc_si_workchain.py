@@ -18,7 +18,7 @@ from aiida.plugins import DataFactory
 
 from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
 
-load_profile('lauerm-test')
+load_profile('lauerm-prod')
 
 
 def get_structure(alat):
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     # AttributeDict is just a special dictionary with the extra benefit that
     # you can set and get the key contents with mydict.mykey, instead of mydict['mykey']
     OPTIONS = AttributeDict()
-    OPTIONS.resources = {'num_machines': 1, 'num_mpiprocs_per_machine': 24}
+    OPTIONS.resources = {'num_machines': 1, 'num_mpiprocs_per_machine': 8}
     OPTIONS.queue_name = ''
     OPTIONS.max_wallclock_seconds = 1800
 

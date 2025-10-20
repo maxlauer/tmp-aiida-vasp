@@ -1,7 +1,3 @@
-
-import aiida_vasp_ext_mlauer
-import aiida
-print(aiida.__version__)
-
-print(aiida_vasp_ext_mlauer.__file__)
-
+import sys, importlib.util
+print("python:", sys.executable)
+print("find_spec:", importlib.util.find_spec('aiida_vasp_ext_mlauer'))

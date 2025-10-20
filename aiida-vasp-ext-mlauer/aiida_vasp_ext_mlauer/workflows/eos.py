@@ -78,7 +78,7 @@ class EoSWorkChain(WorkChain):
         self.ctx.total_energies = []
 
     
-    def _init_inptus(self):
+    def _init_inputs(self):
         
         try:
             self._verbose = self.inputs.verbose.value
@@ -116,13 +116,13 @@ class EoSWorkChain(WorkChain):
         item = random.choice(list(self.inputs.structures.keys()))
         self.ctx.inputs.structure = self.ctx.structures.pop(item)
 
-        self.ctx.inputs = prepare_process_inputs(self.ctx.inputs, namespaces=['dynamic'])
+        self.ctx.inputs = prepare_process_inputs(self.ctx.inputs, namespaces=['dynamics'])
 
     
     def run_next_workchain(self):
         inputs = self.ctx.inputs
         running = self.submit(self._next_workchain, **inputs)
-        self.report(f'launching {self.next_workchain.__name__}<{running.pk}> iteration #{self.ctx.iteration}')
+        self.report(f'launching {self._next_workchain.__name__}<{running.pk}> iteration #{self.ctx.iteration}')
         self.to_context(workchains=append_(running))
 
 
