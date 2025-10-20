@@ -1,5 +1,9 @@
 import numpy as np
-import random
+import io 
+
+from scipy.interpolate import interp1d
+from scipy.optimize import minimize, curve_fit
+from matplotlib import pyplot as plt
 
 from aiida.engine import WorkChain, calcfunction, while_, append_
 from aiida.common.extendeddicts import AttributeDict
@@ -8,8 +12,12 @@ from aiida.plugins import DataFactory, WorkflowFactory
 from aiida_vasp.utils.workchains import prepare_process_inputs # Should check to see that the inputs given to vasp.vasp works well .. not too sure
 from aiida_vasp.utils.workchains import compose_exit_code # combines exit codes together
 
-from scipy.interpolate import interp1d
-from scipy.optimize import minimize
+from aiida_vasp_ext_mlauer.util.functions import Murnaghan
+
+_DEFAULT_K0 = 10.0
+_DEFAULT_K1 = 4.5
+
+
 
 class EoSParaWorkChain(WorkChain):
     """
@@ -33,7 +41,40 @@ class EoSParaWorkChain(WorkChain):
                              valid_type = DataFactory("core.structure"),
                              dynamic = True,
                              help = "Dictionary of Structures used for the Equation of State")
+        # spec.input('structure', 
+        #            valid_type = DataFactory("core.structure",
+        #            dynamic=True,
+        #            help ="Base Structure for which to perform the calculation")
+        #         )
+        # spec.input('init_alat', 
+        #            valid_type = DataFactory("core.float"), 
+        #            dynamic = True, 
+        #            default = None, 
+        #            optional = True, 
+        #            help = "Lattice Constant, around which to perform the scan. If not given, use structure lattice constant"
+        #         )
+        # spec.input('deviation', 
+        #            valid_type = DataFactory("core.float"), 
+        #            dynamic=True, 
+        #            help = "Amount by which to vary the lattice constant. If > 1 considered as %"
+        #         )
+        spec.input('minimum_mode',
+                   valid_type = DataFactory("core.str"),
+                   dynamic=True, 
+                   default = 'Interpolate', 
+                   optional = True, 
+                   valid_values = ['Interpolate', 'Murnaghan']
+                )
         
+        spec.input('metadata.options.create_plot',
+                   valid_type = DataFactory("core.bool"),
+                   dynamic = True,
+                   default = True,
+                   optional = True,
+                   help = "Toggle whether to create a plot, or not. Default is False"
+                )
+        
+
         # Specify Exit Codes
         spec.exit_code(0, "NO_ERROR", message="Calculation ended without Error ... well done I guess")
         spec.exit_code(420, "ERROR_NO_CALLED_WORKCHAIN", message="No called WorkChain detected")
@@ -48,8 +89,8 @@ class EoSParaWorkChain(WorkChain):
         )
 
         spec.output('eos', valid_type=DataFactory('core.array'), help='A List of Cell Volumes and Total Energies')
-        # spec.output('eos_plot', valid_type=DataFactory('core.singlefile'), help='A plot visualizing the Volume-Total Energy relationship, with the fitted EoS')
-        # spec.output('eos_parameter', valid_type=DataFactory('core.dict'), help="A Dict containing the all parameters and the 'type' of the fitted EoS")
+        spec.output('eos_plot', valid_type=DataFactory('core.singlefile'), required = False, help='A plot visualizing the Volume-Total Energy relationship, with the fitted EoS')
+        spec.output('eos_parameter', valid_type=DataFactory('core.dict'), help="A Dict containing the all parameters and the 'type' of the fitted EoS")
         spec.output('eos_minimum', valid_type=DataFactory('core.dict'), help="A cell volume containing the cell volume and total energy at energy minimum")
 
 
@@ -163,11 +204,26 @@ class EoSParaWorkChain(WorkChain):
         # To get DataProvenance, the AiiDA List container has to be prepared by a calcfunction
         total_energies = store_total_energies(DataFactory('list')(list=self.ctx.total_energies))
 
-        energy = locate_minimum(total_energies)
+        if self.ctx.inputs.minimum_mode == "Interpolate":
+            energy, plot_file = locate_minimum_interpolate(total_energies, self.ctx.inputs.metadata.options.create_plot)
+            self.report(f"Minimum Energy Determination using 1D cubic Interpolation")
+            self.out('eos_parameter', DataFactory('core.dict')({'type': "cubic 1D Interpolation"}))
+
+        elif self.ctx.inputs.minimum_mode == "Murnaghan":
+            energy, parameter, covariance, plot_file = locate_minimum_murnaghan(total_energies, self.ctx.inputs.metadata.options.create_plot)
+            self.report(f"Minimum Energy Determination fitting the Murnaghan Equation of State")
+            self.out('eos_parameter', DataFactory('core.dict')({'type': "Murnaghan Fit", 
+                                                                'E0': parameter[0], 
+                                                                'V0': parameter[1], 
+                                                                'K0': parameter[2], 
+                                                                'K1': parameter[3],
+                                                                'covariance': covariance}))
 
         self.out('eos', total_energies)
         self.out('eos_minimum', energy)
 
+        if plot_file is not None:
+            self.out('eos_plot', plot_file)
 
 
 @calcfunction
@@ -184,8 +240,9 @@ def store_total_energies(total_energies):
     return array_data
 
 
+
 @calcfunction
-def locate_minimum(total_energies):
+def locate_minimum_interpolate(total_energies, create_plot = False):
     total_energies_array = total_energies.get_array('eos')
 
     volumes = total_energies_array[:,0]
@@ -194,12 +251,66 @@ def locate_minimum(total_energies):
     ## get minimum energy guess
     min_energy_guess_idx = energies.argmin()
 
-
-    # for now cubic interpolation - later on implement murnaghan equation fitting, or other EOS or other interpolation schemes
     new_energies = interp1d(volumes, energies, kind='cubic')
     min_energy_point = minimize(new_energies, volumes[min_energy_guess_idx], tol=1e-3)
 
     # Store Result
     dict_data = DataFactory('dict')(dict = {'volume': min_energy_point.x[0], 'energy': min_energy_point.fun})
 
-    return dict_data 
+    return dict_data, None
+
+
+
+@calcfunction
+def locate_minimum_murnaghan(total_energies, create_plot = False):
+    total_energies_array = total_energies.get_array('eos')
+
+    volumes = total_energies_array[:,0]
+    energies = total_energies_array[:,1]
+
+    ## get minimum energy guess
+    min_energy_guess_idx = energies.argmin()
+
+    ## Fit Murnaghan Equation of State
+    params, covar = curve_fit(Murnaghan, volumes, energies, p0=[volumes[min_energy_guess_idx], energies[min_energy_guess_idx], _DEFAULT_K0, _DEFAULT_K1])
+
+    min_energy_point = Murnaghan(params[1], *params)
+
+    # Store Result
+    dict_data = DataFactory('dict')(dict = {'volume': params[0], 'energy': min_energy_point})
+
+    if create_plot:
+        fig, ax = plt.subplots()
+        ax.set_title('Murnaghan Plot')
+
+        ax.scatter(x=volumes, y=energies)
+
+        x_fit = np.linspace(volumes.min() - 1, volumes.max() + 1, 500)    # I should make these numbers optional .. later
+        y_fit = Murnaghan(x_fit, *params)
+        ax.plot(x=x_fit, y=y_fit, label='Murnaghan Fit', color='orange')
+
+        ax.axvline(x=params[1], color='grey', linestyle='--', label=r'$V_\mathrm{0} = $'+f'${params[1]:.3f}$')
+
+        ax.set_xlabel(r'Volume / $10^\mathrm{-30}$ m^\mathrm{3}')
+        ax.set_ylabel(r'Energy / eV')
+        ax.legend()
+
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format='png')
+        buffer.seek(0)
+
+        plot_file = DataFactory('core.singlefile')(file=buffer, filename='murnaghan_plot.png')
+    else:
+        plot_file = None
+
+    return dict_data, params, covar, plot_file
+
+
+
+# @calcfunction
+# def plot_EoS(total_energies, params, type):
+#     total_energies_array = total_energies.get_array('eos')
+
+#     volumes = total_energies_array[:,0]
+#     energies = total_energies_array[:,1]
+

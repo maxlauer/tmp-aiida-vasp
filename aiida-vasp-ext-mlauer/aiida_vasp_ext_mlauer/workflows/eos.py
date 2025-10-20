@@ -11,6 +11,8 @@ from aiida_vasp.utils.workchains import compose_exit_code # combines exit codes 
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize
 
+## THIS IS A STUB .. DOESN"T WORK ...
+
 class EoSWorkChain(WorkChain):
     """
     The Equation of State Work Chain

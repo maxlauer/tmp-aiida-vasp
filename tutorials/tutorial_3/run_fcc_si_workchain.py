@@ -92,6 +92,8 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
     inputs.settings = dict_data(dict=settings)
     # Workchain related inputs, in this case, give more explicit output to report
     inputs.verbose = Bool(True)
+    
+    inputs.minimum_mode = Str("Murnaghan")
     # Submit the workchain with the set inputs
     submit(workchain, **inputs)
 
