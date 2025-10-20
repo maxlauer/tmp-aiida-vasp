@@ -27,4 +27,5 @@ pytest = "^6.0"
 # AIIDA Entry Points 
 [tool.poetry.plugins."aiida.workflows"]
 "vasp_ext_ml.eos" = "aiida_vasp_ext_mlauer.workflows.eos:EoSWorkChain"
+"vasp_ext_ml.eos_para" = "aiida_vasp_ext_mlauer.workflows.eos:EoSParaWorkChain"
 

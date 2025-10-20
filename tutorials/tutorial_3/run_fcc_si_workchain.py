@@ -16,9 +16,10 @@ from aiida.orm import Bool, Code, Str
 from aiida.plugins import DataFactory
 
 
+# from aiida_vasp_ext_mlauer.workflows.eos_para import EoSParaWorkChain as EoSWorkChain
 from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
 
-load_profile('lauerm-prod')
+load_profile('lauerm-test')
 
 
 def get_structure(alat):
@@ -122,13 +123,14 @@ if __name__ == '__main__':
     # AttributeDict is just a special dictionary with the extra benefit that
     # you can set and get the key contents with mydict.mykey, instead of mydict['mykey']
     OPTIONS = AttributeDict()
-    OPTIONS.resources = {'num_machines': 1, 'num_mpiprocs_per_machine': 8}
-    OPTIONS.queue_name = ''
+    OPTIONS.resources = {'num_machines': 1, 'num_mpiprocs_per_machine': 24}
+    OPTIONS.queue_name = 'debug'
+    # OPTIONS.qos = "short"
     OPTIONS.max_wallclock_seconds = 1800
 
     # POSCAR equivalent
     # Set the silicon structure
-    LATTICE_CONSTANTS = [3.5, 3.6, 3.7, 3.8, 3.9, 4.0, 4.1, 4.2, 4.3]
+    LATTICE_CONSTANTS = [3.7, 3.8, 3.9, 4.0, 4.1, 4.2]
     STRUCTURES = get_structures(LATTICE_CONSTANTS)
 
     main(CODE_STRING, INCAR, KMESH, STRUCTURES, POTENTIAL_FAMILY, POTENTIAL_MAPPING, OPTIONS)
