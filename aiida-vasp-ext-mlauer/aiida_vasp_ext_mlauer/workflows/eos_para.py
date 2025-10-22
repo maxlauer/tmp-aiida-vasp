@@ -12,6 +12,8 @@ from aiida.plugins import DataFactory, WorkflowFactory
 from aiida_vasp.utils.workchains import prepare_process_inputs # Should check to see that the inputs given to vasp.vasp works well .. not too sure
 from aiida_vasp.utils.workchains import compose_exit_code # combines exit codes together
 
+from aiida.orm import Dict
+
 from aiida_vasp_ext_mlauer.util.functions import Murnaghan
 
 _DEFAULT_K0 = 10.0
@@ -58,20 +60,24 @@ class EoSParaWorkChain(WorkChain):
         #            dynamic=True, 
         #            help = "Amount by which to vary the lattice constant. If > 1 considered as %"
         #         )
+
         spec.input('minimum_mode',
                    valid_type = DataFactory("core.str"),
-                   dynamic=True, 
-                   default = 'Interpolate', 
-                   optional = True, 
-                   valid_values = ['Interpolate', 'Murnaghan']
+                   default = lambda: DataFactory("core.str")('Interpolate'), 
+                   help = "Determines how the energy minimum is evaluated - Interpolate: 1D cubic Interpolation; Murnaghan: fit Murnaghan EoS"
                 )
         
-        spec.input('metadata.options.create_plot',
-                   valid_type = DataFactory("core.bool"),
-                   dynamic = True,
+
+        spec.input_namespace(name='wc_metadata',
+                             dynamic = False,
+                             help='Custom namespace for WorkChain-specific metadata (e.g. verbosity, plotting, tags).'
+                )
+        
+        spec.input('wc_metadata.create_plot',
+                   valid_type = bool,
                    default = True,
-                   optional = True,
-                   help = "Toggle whether to create a plot, or not. Default is False"
+                   help = "Toggle whether to create a plot, or not. Default is False",
+                   non_db = True
                 )
         
 
@@ -108,6 +114,10 @@ class EoSParaWorkChain(WorkChain):
         self.ctx.structures = dict(self.inputs.structures)
 
         self.ctx.iteration = 0
+
+        self.ctx.mode = self.inputs.minimum_mode
+
+        self.ctx.wc_metadata = self.inputs.wc_metadata
 
         # define context inputs
         self.ctx.inputs = AttributeDict()
@@ -204,26 +214,21 @@ class EoSParaWorkChain(WorkChain):
         # To get DataProvenance, the AiiDA List container has to be prepared by a calcfunction
         total_energies = store_total_energies(DataFactory('list')(list=self.ctx.total_energies))
 
-        if self.ctx.inputs.minimum_mode == "Interpolate":
-            energy, plot_file = locate_minimum_interpolate(total_energies, self.ctx.inputs.metadata.options.create_plot)
+
+        if self.ctx.mode == "Interpolate":
+            analysis_dict = locate_minimum_interpolate(total_energies)
             self.report(f"Minimum Energy Determination using 1D cubic Interpolation")
             self.out('eos_parameter', DataFactory('core.dict')({'type': "cubic 1D Interpolation"}))
 
-        elif self.ctx.inputs.minimum_mode == "Murnaghan":
-            energy, parameter, covariance, plot_file = locate_minimum_murnaghan(total_energies, self.ctx.inputs.metadata.options.create_plot)
+        elif self.ctx.mode == "Murnaghan":
+            analysis_dict = locate_minimum_murnaghan(total_energies)
             self.report(f"Minimum Energy Determination fitting the Murnaghan Equation of State")
-            self.out('eos_parameter', DataFactory('core.dict')({'type': "Murnaghan Fit", 
-                                                                'E0': parameter[0], 
-                                                                'V0': parameter[1], 
-                                                                'K0': parameter[2], 
-                                                                'K1': parameter[3],
-                                                                'covariance': covariance}))
+            
 
         self.out('eos', total_energies)
-        self.out('eos_minimum', energy)
+        self.out('eos_minimum', analysis_dict['min_energy'])
+        self.out('eos_parameter', analysis_dict['parameters'])
 
-        if plot_file is not None:
-            self.out('eos_plot', plot_file)
 
 
 @calcfunction
@@ -242,7 +247,7 @@ def store_total_energies(total_energies):
 
 
 @calcfunction
-def locate_minimum_interpolate(total_energies, create_plot = False):
+def locate_minimum_interpolate(total_energies):
     total_energies_array = total_energies.get_array('eos')
 
     volumes = total_energies_array[:,0]
@@ -255,55 +260,76 @@ def locate_minimum_interpolate(total_energies, create_plot = False):
     min_energy_point = minimize(new_energies, volumes[min_energy_guess_idx], tol=1e-3)
 
     # Store Result
-    dict_data = DataFactory('dict')(dict = {'volume': min_energy_point.x[0], 'energy': min_energy_point.fun})
+    dict_data = {'volume': min_energy_point.x[0], 'energy': min_energy_point.fun}
 
-    return dict_data, None
+    parameters = {'type': '1D cubic Interpolation'}
+
+    return {
+        "min_energy": DataFactory("core.str")("A"), # Dict(dict = dict_data),
+        "parameters": DataFactory("core.str")("A") # Dict(dict = parameters)
+    }
 
 
 
 @calcfunction
-def locate_minimum_murnaghan(total_energies, create_plot = False):
+def locate_minimum_murnaghan(total_energies):
     total_energies_array = total_energies.get_array('eos')
 
     volumes = total_energies_array[:,0]
     energies = total_energies_array[:,1]
+
+    # Document Type of Analysis
+    parameters = {'type': 'Murnaghan EoS Fit'}
 
     ## get minimum energy guess
     min_energy_guess_idx = energies.argmin()
 
     ## Fit Murnaghan Equation of State
     params, covar = curve_fit(Murnaghan, volumes, energies, p0=[volumes[min_energy_guess_idx], energies[min_energy_guess_idx], _DEFAULT_K0, _DEFAULT_K1])
+    parameters |= {'E0': params[0], 
+                   'V0': params[1], 
+                   'K0': params[2], 
+                   'K1': params[3],
+                   'covariance': covar
+                   }
 
     min_energy_point = Murnaghan(params[1], *params)
 
     # Store Result
-    dict_data = DataFactory('dict')(dict = {'volume': params[0], 'energy': min_energy_point})
+    dict_data = {'volume': params[0], 'energy': min_energy_point}
 
-    if create_plot:
-        fig, ax = plt.subplots()
-        ax.set_title('Murnaghan Plot')
+    return {
+        "min_energy": DataFactory("core.dict")(dict = dict_data), # Dict(dict = dict_data),
+        "parameters": DataFactory("core.dict")(dict = {"A": "B"}) # Dict(dict = parameters)
+    }
 
-        ax.scatter(x=volumes, y=energies)
 
-        x_fit = np.linspace(volumes.min() - 1, volumes.max() + 1, 500)    # I should make these numbers optional .. later
-        y_fit = Murnaghan(x_fit, *params)
-        ax.plot(x=x_fit, y=y_fit, label='Murnaghan Fit', color='orange')
+    # if create_plot:
+    #     fig, ax = plt.subplots()
+    #     ax.set_title('Murnaghan Plot')
 
-        ax.axvline(x=params[1], color='grey', linestyle='--', label=r'$V_\mathrm{0} = $'+f'${params[1]:.3f}$')
+    #     ax.scatter(volumes, energies)
 
-        ax.set_xlabel(r'Volume / $10^\mathrm{-30}$ m^\mathrm{3}')
-        ax.set_ylabel(r'Energy / eV')
-        ax.legend()
+    #     x_fit = np.linspace(volumes.min() - 1, volumes.max() + 1, 500)    # I should make these numbers optional .. later
+    #     y_fit = Murnaghan(x_fit, *params)
+    #     ax.plot(x_fit, y_fit, label='Murnaghan Fit', color='orange')
 
-        buffer = io.BytesIO()
-        fig.savefig(buffer, format='png')
-        buffer.seek(0)
+    #     ax.axvline(x=params[1], color='grey', linestyle='--', label=fr'$V_0 = {params[1]:.3f}$')
 
-        plot_file = DataFactory('core.singlefile')(file=buffer, filename='murnaghan_plot.png')
-    else:
-        plot_file = None
+    #     ax.set_xlabel(r'Volume / $10^\mathrm{-30}$ m^\mathrm{3}')
+    #     ax.set_ylabel(r'Energy / eV')
+    #     ax.legend()
 
-    return dict_data, params, covar, plot_file
+    #     buffer = io.BytesIO()
+    #     fig.savefig(buffer, format='png')
+    #     plt.close(fig)
+    #     buffer.seek(0)
+
+    #     plot_file = DataFactory('core.singlefile')(file=buffer, filename='murnaghan_plot.png')
+    # else:
+    #     plot_file = None
+
+    # return dict_data, params, covar, plot_file
 
 
 
@@ -313,4 +339,5 @@ def locate_minimum_murnaghan(total_energies, create_plot = False):
 
 #     volumes = total_energies_array[:,0]
 #     energies = total_energies_array[:,1]
+
 

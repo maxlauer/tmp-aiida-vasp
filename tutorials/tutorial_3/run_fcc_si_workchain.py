@@ -16,8 +16,8 @@ from aiida.orm import Bool, Code, Str
 from aiida.plugins import DataFactory
 
 
-# from aiida_vasp_ext_mlauer.workflows.eos_para import EoSParaWorkChain as EoSWorkChain
-from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
+from aiida_vasp_ext_mlauer.workflows.eos_para import EoSParaWorkChain as EoSWorkChain
+# from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
 
 load_profile('lauerm-test')
 
