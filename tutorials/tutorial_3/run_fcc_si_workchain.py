@@ -16,8 +16,7 @@ from aiida.orm import Bool, Code, Str
 from aiida.plugins import DataFactory
 
 
-from aiida_vasp_ext_mlauer.workflows.eos_para import EoSParaWorkChain as EoSWorkChain
-# from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
+from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
 
 load_profile('lauerm-test')
 
@@ -95,6 +94,10 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
     
     inputs.minimum_mode = Str("Murnaghan")
     # Submit the workchain with the set inputs
+
+    inputs.wc_metadata = AttributeDict()
+    inputs.wc_metadata.create_plot = True
+
     submit(workchain, **inputs)
 
 

@@ -205,13 +205,15 @@ class EoSWorkChain(WorkChain):
             self.report(f"Minimum Energy Determination fitting the Murnaghan Equation of State")
             
 
-        if self.ctx.wc_metadata.create_plot:
-            self.report("Generating Plot of Equation of State")
-            create_plot(total_energies, parameters=analysis_dict["min_energy"])
-
         self.out('eos', total_energies)
         self.out('eos_minimum', analysis_dict["min_energy"])
-        self.out('eos_parameter', analysis_dict["min_energy"])
+        self.out('eos_parameter', analysis_dict["parameters"])
+
+
+        if self.ctx.wc_metadata.create_plot:
+            self.report("Generating Plot of Equation of State")
+            plot_file = create_plot(total_energies, parameters=analysis_dict["parameters"])
+            self.out('eos_plot', plot_file)
 
 
 
@@ -300,7 +302,7 @@ def create_plot(total_energies, parameters):
     energies = total_energies_array[:,1]
     type = parameters['type'] 
 
-    x_fit = np.linspace(volumes.min - 1, volumes.max() + 1, 500)
+    x_fit = np.linspace(volumes.min() - 1, volumes.max() + 1, 500)
 
     fig, ax = plt.subplots()
     ax.scatter(volumes, energies)
@@ -333,7 +335,7 @@ def create_plot(total_energies, parameters):
 
     buffer = io.BytesIO()
     fig.savefig(buffer, format='png')
-    fig.close()
+    plt.close(fig)
 
     buffer.seek(0)
 
