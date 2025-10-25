@@ -273,7 +273,7 @@ def locate_minimum_murnaghan(total_energies):
     min_energy_guess_idx = energies.argmin()
 
     ## Fit Murnaghan Equation of State
-    params, covar = curve_fit(Murnaghan, volumes, energies, p0=[volumes[min_energy_guess_idx], energies[min_energy_guess_idx], _DEFAULT_K0, _DEFAULT_K1])
+    params, covar = curve_fit(Murnaghan, volumes, energies, p0=[energies[min_energy_guess_idx], volumes[min_energy_guess_idx], _DEFAULT_K0, _DEFAULT_K1])
     parameters |= {'E0': params[0], 
                    'V0': params[1], 
                    'K0': params[2], 

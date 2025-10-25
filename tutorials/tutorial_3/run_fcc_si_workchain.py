@@ -92,7 +92,7 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
     # Workchain related inputs, in this case, give more explicit output to report
     inputs.verbose = Bool(True)
     
-    inputs.minimum_mode = Str("Murnaghan")
+    inputs.minimum_mode = Str("Interpolate")
     # Submit the workchain with the set inputs
 
     inputs.wc_metadata = AttributeDict()
@@ -103,7 +103,7 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
 
 if __name__ == '__main__':
     # Code_string is chosen among the list given by 'verdi code list'
-    CODE_STRING = 'vasp6@jhpc'
+    CODE_STRING = 'vasp6.4@jhpc'
 
     # INCAR equivalent
     # Set input parameters
