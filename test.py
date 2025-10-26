@@ -1,3 +1,9 @@
-import sys, importlib.util
-print("python:", sys.executable)
-print("find_spec:", importlib.util.find_spec('aiida_vasp_ext_mlauer'))
+from aiida_vasp_ext_mlauer.workflows.eos import EoSRelaxWorkChain
+
+from aiida.common.extendeddicts import AttributeDict
+from aiida import load_profile
+
+load_profile('lauerm-test')
+
+builder = EoSRelaxWorkChain.get_builder()
+print(builder)

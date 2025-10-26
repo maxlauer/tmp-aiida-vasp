@@ -16,7 +16,9 @@ from aiida.orm import Bool, Code, Str
 from aiida.plugins import DataFactory
 
 
-from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
+
+# from aiida_vasp_ext_mlauer.workflows.eos import EoSWorkChain
+from aiida_vasp_ext_mlauer.workflows.eos import EoSRelaxWorkChain as EoSWorkChain
 
 load_profile('lauerm-test')
 
@@ -92,8 +94,17 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
     # Workchain related inputs, in this case, give more explicit output to report
     inputs.verbose = Bool(True)
     
-    inputs.minimum_mode = Str("Interpolate")
+    inputs.minimum_mode = Str("Murnaghan")
     # Submit the workchain with the set inputs
+
+    inputs.relax = {
+    "perform": Bool(True),
+    "force_cutoff": DataFactory('core.float')(1e-3),
+    "steps": DataFactory('core.int')(15),
+    "positions": Bool(True),
+    "shape": Bool(True),
+    "volume": Bool(False),
+    }
 
     inputs.wc_metadata = AttributeDict()
     inputs.wc_metadata.create_plot = True

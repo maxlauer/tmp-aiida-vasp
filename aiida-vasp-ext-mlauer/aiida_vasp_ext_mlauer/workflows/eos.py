@@ -33,6 +33,8 @@ class EoSWorkChain(WorkChain):
     _verbose = False 
     _next_workchain_string = "vasp.vasp"
     _next_workchain = WorkflowFactory(_next_workchain_string)
+    
+    _namespaces = ["dynamics"]
 
     
     @classmethod
@@ -138,7 +140,7 @@ class EoSWorkChain(WorkChain):
             # Increase iteration index, update structure of ctx.inputs and make sure the inputs are correctly formatted
             self.ctx.iteration += 1
             self.ctx.inputs.structure = structure
-            self.ctx.inputs = prepare_process_inputs(self.ctx.inputs, namespaces=['dynamics'])
+            self.ctx.inputs = prepare_process_inputs(self.ctx.inputs, namespaces=self.__class__._namespaces)
 
             # Submit VaspWorkChain for Structure
             running = self.submit(self._next_workchain, **self.ctx.inputs)
@@ -217,6 +219,13 @@ class EoSWorkChain(WorkChain):
 
 
 
+class EoSRelaxWorkChain(EoSWorkChain):
+    _next_workchain_string = "vasp.relax"
+    _next_workchain = WorkflowFactory(_next_workchain_string)
+    _namespaces = ["relax", "verify", "dynamics"]
+
+
+
 
 
 @calcfunction
@@ -256,7 +265,6 @@ def locate_minimum_interpolate(total_energies):
         "min_energy": Dict(dict = dict_data), 
         "parameters": Dict(dict = parameters) 
     }
-
 
 
 @calcfunction
@@ -322,10 +330,10 @@ def create_plot(total_energies, parameters):
             min_energy_guess_idx = energies.argmin()
             y_fit = CubicSpline(volumes, energies)
             
-            v0 = minimize(y_fit, min_energy_guess_idx, tol=1e-3)
+            v0 = minimize(y_fit, min_energy_guess_idx, tol=1e-3).x[0]
 
             ax.set_title("Interpolated EoS Plot")
-            ax.plot(x_fit, y_fit)
+            ax.plot(x_fit, y_fit(x_fit))
 
     ax.axvline(x=v0, color='grey', linestyle='--', label=fr'$V_0 = {v0:.3f}$ $A^3$')
 
