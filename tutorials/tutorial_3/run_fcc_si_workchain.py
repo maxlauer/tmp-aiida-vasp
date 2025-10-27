@@ -63,7 +63,7 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
 
     # First, we need to fetch the AiiDA datatypes which will
     # house the inputs to our calculation
-    dict_data = DataFactory('dict')
+    dict_data = DataFactory('core.dict')
     kpoints_data = DataFactory('array.kpoints')
 
     # Then, we set the workchain you would like to call
@@ -71,6 +71,7 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
 
     # And finally, we declare the options, settings and input containers
     settings = AttributeDict()
+    settings.parser_settings = AttributeDict()
     inputs = AttributeDict()
 
     # Set inputs for the following WorkChain execution
@@ -114,7 +115,7 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
 
 if __name__ == '__main__':
     # Code_string is chosen among the list given by 'verdi code list'
-    CODE_STRING = 'vasp6.4@jhpc'
+    CODE_STRING = 'vasp6@jhpc'
 
     # INCAR equivalent
     # Set input parameters
