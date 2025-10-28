@@ -65,14 +65,14 @@ class EoSWorkChain(WorkChain):
                 )
         
 
-        spec.input_namespace(name='workchain_metadata', # should I call this eos_metadata?
+        spec.input_namespace(name='workchain_metadata',
                              dynamic = False,
                              help='Custom namespace for WorkChain-specific metadata (e.g. verbosity, plotting, tags).'
                 )
         
         spec.input('workchain_metadata.create_plot', 
                    valid_type = bool,
-                   default = True,
+                   default = False,
                    help = "Toggle whether to create a plot, or not. Default is False",
                    non_db = True
                 )
@@ -110,7 +110,8 @@ class EoSWorkChain(WorkChain):
         # Load Structures in Context
         self.ctx.structures = dict(self.inputs.structures)
 
-        self.ctx.iteration = 0
+        # Set up iteration counter for keeping track of what is performed
+        self.ctx.iteration = 0 
 
         self.ctx.mode = self.inputs.minimum_mode.value
 
