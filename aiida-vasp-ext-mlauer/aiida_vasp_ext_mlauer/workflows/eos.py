@@ -19,7 +19,19 @@ from aiida_vasp_ext_mlauer.util.functions import Murnaghan
 _DEFAULT_K0 = 10.0
 _DEFAULT_K1 = 4.5
 
+"""
+todo:
+- Add more minimum determination methods? Birch-Murnaghan, Vinet, etc.
+- Add more plotting options  ... myb but then again I can just modify the created plot after the fact
 
+questions:
+- Should I allow for fitting of multiple EoS types at once and then compare them in the plot?
+- Should I allow for different plot styles (e.g. with/without fit, different colors, etc.)?
+
+- Should minimum_mode be part of workchain_metadata?
+    - if it shouldn't - is it really necessary to have the determination method as part of the output? .. but then again if i don't have that the parameter output becomes kinda weird
+    - Technically it determines how the output is generated though so as input makes sense .. but does both make sense at the same time?
+"""
 
 class EoSWorkChain(WorkChain):
     """
@@ -46,19 +58,19 @@ class EoSWorkChain(WorkChain):
                              dynamic = True,
                              help = "Dictionary of Structures used for the Equation of State")
         
-        spec.input('minimum_mode',
+        spec.input('minimum_mode',  # is this metadata? or just an input? - I think input is fine, since metadata would mean I don't want provenance
                    valid_type = DataFactory("core.str"),
                    default = lambda: DataFactory("core.str")('Interpolate'), 
                    help = "Determines how the energy minimum is evaluated - Interpolate: 1D cubic Interpolation; Murnaghan: fit Murnaghan EoS"
                 )
         
 
-        spec.input_namespace(name='wc_metadata',
+        spec.input_namespace(name='workchain_metadata', # should I call this eos_metadata?
                              dynamic = False,
                              help='Custom namespace for WorkChain-specific metadata (e.g. verbosity, plotting, tags).'
                 )
         
-        spec.input('wc_metadata.create_plot',
+        spec.input('workchain_metadata.create_plot', 
                    valid_type = bool,
                    default = True,
                    help = "Toggle whether to create a plot, or not. Default is False",
@@ -102,7 +114,7 @@ class EoSWorkChain(WorkChain):
 
         self.ctx.mode = self.inputs.minimum_mode.value
 
-        self.ctx.wc_metadata = self.inputs.wc_metadata
+        self.ctx.workchain_metadata = self.inputs.workchain_metadata
 
         # define context inputs
         self.ctx.inputs = AttributeDict()
@@ -212,7 +224,7 @@ class EoSWorkChain(WorkChain):
         self.out('eos_parameter', analysis_dict["parameters"])
 
 
-        if self.ctx.wc_metadata.create_plot:
+        if self.ctx.workchain_metadata.create_plot:
             self.report("Generating Plot of Equation of State")
             plot_file = create_plot(total_energies, parameters=analysis_dict["parameters"])
             self.out('eos_plot', plot_file)
@@ -254,7 +266,7 @@ def locate_minimum_interpolate(total_energies):
     min_energy_guess_idx = energies.argmin()
 
     new_energies = CubicSpline(volumes, energies)
-    min_energy_point = minimize(new_energies, volumes[min_energy_guess_idx], tol=1e-3)  # I should make these numbers optional under wc_metadata.plot_options
+    min_energy_point = minimize(new_energies, volumes[min_energy_guess_idx], tol=1e-3)  # I should make these numbers optional under workchain_metadata.plot_options
 
     # Store Result
     dict_data = {'volume': min_energy_point.x[0], 'energy': min_energy_point.fun}
@@ -320,7 +332,7 @@ def create_plot(total_energies, parameters):
             params = [parameters.get(para) for para in ['E0', 'V0', 'K0', 'K1']]
             v0 = parameters.get('V0')
         
-            ax.set_title('Murnaghan EoS Plot') # I should make these numbers optional under wc_metadata.plot_options
+            ax.set_title('Murnaghan EoS Plot') # I should make these numbers optional under workchain_metadata.plot_options
             y_fit = Murnaghan(x_fit, *params)
 
             ax.plot(x_fit, y_fit, label='Murnaghan Fit', color='orange')
