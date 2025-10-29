@@ -60,7 +60,8 @@ class VolOptWorkChain(WorkChain):
         spec.input("step_1.structure_generation.parameters",
                    valid_type=DataFactory("core.dict"),
                    default=lambda: DataFactory("core.dict")(dict={'mode': "uniform"}),      # I don't know if this is good or not ... #QUESTION
-                   help="Mode for structure generation for volume optimization."
+                   validator = lambda x: isinstance(x, DataFactory("core.dict")) # Write Validator to check, if all parameters of the selected mode are present #TODO
+                   help="Parameters for structure generation for volume optimization. - <mode> - required key: Modes: 'uniform', 'power'; 'power needs key <power_constant> as well'"
                    )
 
         spec.input("step_1.structure_generation.max_volume_scaling",  # QUESTION
@@ -170,13 +171,8 @@ def generate_eos_structures(inp_structure, structure_generation):
         case 'uniform':
             volume_deviations = 1 + np.linspace(-max_vol_dev, max_vol_dev, num_lat_pts)
         case 'power':
-            try
-            volume_deviations = 1 + powerrange(-max_vol_dev, max_vol_dev, num_lat_pts, power=metdata.get('power_constant', 1.5))
-            
-
-
-
-    print(volume_deviations)
+            volume_deviations = 1 + powerrange(-max_vol_dev, max_vol_dev, num_lat_pts, power=parameters.get('power_constant', 1.5))
+        
 
     structures = {}
     for vol_dev in volume_deviations:
