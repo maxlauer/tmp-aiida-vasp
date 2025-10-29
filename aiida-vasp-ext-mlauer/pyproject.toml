@@ -28,4 +28,5 @@ pytest = "^6.0"
 [tool.poetry.plugins."aiida.workflows"]
 "vasp_ext_ml.eos" = "aiida_vasp_ext_mlauer.workflows.eos:EoSWorkChain"
 "vasp_ext_ml.eos_relax" = "aiida_vasp_ext_mlauer.workflows.eos:EoSRelaxWorkChain"
+"vasp_ext_ml.vol_opt" = "aiida_vasp_ext_mlauer.workflows.vol_opt:VolOptWorkChain"
 

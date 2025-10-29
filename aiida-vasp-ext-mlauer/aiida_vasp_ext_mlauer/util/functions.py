@@ -20,3 +20,15 @@ def Murnaghan(V, E0, V0, K0, K1):
     conversion_factor = e_val * 10**(-2)## G[Pa] (10**(9)) * [A^3](10**(-30)) * [1/e] 1/1.602 * 10**19
 
     return E0 + ( (K0 * V) / K1 * (((V0 / V) ** K1) / (K1 - 1) + 1) - (K0 * V0) / (K1 - 1) ) * conversion_factor
+
+
+
+def powerrange(start, stop, num, power=1):
+    
+    delta = np.difference([start, stop])
+    dev = delta / num
+
+    # linear space from -1 to 1
+    points = np.linspace(-1, 1, num)
+    # apply power-law
+    return (np.sign(points) * np.abs(points)**power) * dev
