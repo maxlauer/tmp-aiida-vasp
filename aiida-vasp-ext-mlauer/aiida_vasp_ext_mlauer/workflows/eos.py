@@ -5,7 +5,7 @@ from scipy.interpolate import CubicSpline
 from scipy.optimize import minimize, curve_fit
 from matplotlib import pyplot as plt
 
-from aiida.engine import WorkChain, calcfunction, while_, append_
+from aiida.engine import WorkChain, calcfunction, append_
 from aiida.common.extendeddicts import AttributeDict
 from aiida.plugins import DataFactory, WorkflowFactory
 
@@ -21,8 +21,11 @@ _DEFAULT_K1 = 4.5
 
 """
 todo:
+- Write Tests for the WorkChain and Calcfunctions
+
 - Add more minimum determination methods? Birch-Murnaghan, Vinet, etc.
 - Add more plotting options  ... myb but then again I can just modify the created plot after the fact
+- combine locate_minimum_interpolate and locate_minimum_murnaghan into one locate minimum calcfunction?
 
 questions:
 - Should I allow for fitting of multiple EoS types at once and then compare them in the plot?
@@ -104,7 +107,7 @@ class EoSWorkChain(WorkChain):
 
 
     def _init_context(self):
-        # set exit code to error - I don't understand quite why yet .. but ok
+        # set exit code to error - If successful, will be overwritten later, else remains unkown if not explicitly changed
         self.ctx.exit_code = self.exit_codes.ERROR_UNKOWN
 
         # Load Structures in Context
@@ -181,7 +184,7 @@ class EoSWorkChain(WorkChain):
 
             else:
                 self.ctx.exit_code = compose_exit_code(next_workchain_exit_status, next_workchain_exit_message)
-                self.report(f"The called{workchain.__class__.__name__}<{workchain.pk}> returned a non-zero exit status.\nThe exit status {self.ctx.exit_code} is inherited.")
+                self.report(f"The called {workchain.__class__.__name__}<{workchain.pk}> returned a non-zero exit status.\nThe exit status {self.ctx.exit_code} is inherited.")
 
         
             if not self.ctx.structures:
@@ -219,6 +222,8 @@ class EoSWorkChain(WorkChain):
             analysis_dict = locate_minimum_murnaghan(total_energies)
             self.report(f"Minimum Energy Determination fitting the Murnaghan Equation of State")
             
+        #TODO - check if the fit worked .. how would I do that?
+
 
         self.out('eos', total_energies)
         self.out('eos_minimum', analysis_dict["min_energy"])
@@ -256,6 +261,7 @@ def store_total_energies(total_energies):
 
 
 
+# TODO - combine these two calcfunctions into one ?
 @calcfunction
 def locate_minimum_interpolate(total_energies):
     total_energies_array = total_energies.get_array('eos')

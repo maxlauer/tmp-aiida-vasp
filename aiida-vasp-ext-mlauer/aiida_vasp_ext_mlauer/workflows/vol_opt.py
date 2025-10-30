@@ -7,7 +7,8 @@ from aiida.plugins import DataFactory, WorkflowFactory
 
 from aiida.common.extendeddicts import AttributeDict
 
-from aiida_vasp_ext_mlauer.util.structures import gen_aiida_structure
+from aiida_vasp.utils.workchains import compose_exit_code
+
 from aiida_vasp_ext_mlauer.util.functions import powerrange
 
 load_profile('lauerm-test')
@@ -15,13 +16,14 @@ load_profile('lauerm-test')
 """
 todo:
 - too much
+- think about maybe making a multi step workchain an option - idea - first scan, second more targeted eos scan and then relax - later
 
 questions:
-- should things like max_lattice_scaling and lattice_points be part of the step_1 namespace?
+- should things like max_lattice_scaling and lattice_points be part of the step_1 namespace? - yes - they are definitly inputs
     - are they part of metadata? or just inputs?
-- should workchain metadata be exposed, or focused together with the workchain_metadata of the higher level workchain?
+- should workchain metadata be exposed, or focused together with the workchain_metadata of the higher level workchain? - no - keep together at the highest level, and supply them downwards
 
-- what exit codes do I need?
+- what exit codes do I need? - I think the NO_CALLED_xxx_WORKCHAIN + the error of the underlying workchains should be enough
 - what outputs do I want to expose?
 - are there better names for step_1 and step_2 - eos and relax maybe? but realx would then have relax.relax ..
 - should I enforce odd numbered lattice points ? WHY? I'm not sure if that is good .. for now I won't
@@ -54,9 +56,15 @@ class VolOptWorkChain(WorkChain):
                              dynamic = False,
                              help='Custom namespace for WorkChain-specific metadata (e.g. verbosity, plotting, tags).'
                             )
+        spec.input('workchain_metadata.volume_precision', 
+                   valid_type = int,
+                   default = lambda: 3,
+                   help = "Precision decimal places for volume convergence in \u213B\u00B3 in VolOptWorkChain. Default is 3",
+                   non_db = True
+                   )
+
 
         # Define Inputs realted to EoS WorkChain (Step 1)
-        # ARE THESE METADATA OR JUST INPUTS? #QUESTION - prolly not, as they would be needed in order to redo the calculation
         spec.input("step_1.structure_generation.parameters",
                    valid_type=DataFactory("core.dict"),
                    default=lambda: DataFactory("core.dict")(dict={'mode': "uniform"}),      # I don't know if this is good or not ... #QUESTION
@@ -77,28 +85,36 @@ class VolOptWorkChain(WorkChain):
                    )
 
         # Define Metadata Inputs for Step 1
-
         spec.input_namespace(name='workchain_metadata.eos_metadata',
                              dynamic = False,
                              help='Custom namespace for EOS WorkChain-specific metadata (e.g. verbosity, plotting, tags).'
                             )
-        spec.input('workchain_metadata.create_plot',
+        
+        spec.input('workchain_metadata.eos_metadata.create_plot',
                    valid_type = bool,
                    default = False,
                    help = f"Toggle whether to create a plot from {cls._step_1_workchain}, or not. Default is False",
                    non_db = True
                    )
+        
+        
 
 
         # Define Exit Codes
         spec.exit_code(0, "NO_ERROR", message="Calculation ended without Error ... well done I guess")
-        spec.exit_code(420, "ERROR_NO_CALLED_WORKCHAIN", message="No called WorkChain detected")
-        spec.exit_code(500, "ERROR_UNKOWN", message="Unkown Error detected in the EOS WorkChain")
+        spec.exit_code(420, "ERROR_NO_CALLED_EOS_WORKCHAIN", message="No called EoSWorkChain detected")
+        spec.exit_code(421, "ERROR_NO_CALLED_RELAX_WORKCHAIN", message="No called vasp.relax WorkChain detected")
+        spec.exit_code(500, "ERROR_UNKOWN", message="Unkown Error detected in the VolOptWorkChain")
 
 
         # Define Outline
         spec.outline(
-            cls.initialize
+            cls.initialize,
+            cls.init_and_run_step_1,
+            cls.verify_step_1,
+            cls.init_and_run_step_2,
+            cls.verify_step_2,
+            cls.finalize
         )
 
 
@@ -114,21 +130,26 @@ class VolOptWorkChain(WorkChain):
         # set exit code to error - I don't understand quite why yet .. but ok
         self.ctx.exit_code = self.exit_codes.ERROR_UNKOWN
 
-        # Set up structures (for now I will keep provenance here - don't know if necessary) #QUESTION
-        self.ctx.structures = generate_eos_structures(self.inputs.step_1.structure_generation)
+        # Load Inital Structure in Context
+        self.ctx.structure = self.inputs.structure
 
-        ## What do I need to set up in the context
-        # - I need to generate the structures - for that I need a function, and modes  ... probably a calcfunction? cause it creates the structures from data-nodes which are inserted ..
-        # self.ctx should have
-        #  - structures - list of structures to be used in step 1
-        #  - eos_finished - bool to indicate if step 1 is finished (Needed?)
-        #  - eos_results - to store results from step 1
-        #  - eos_total_energies
-        #  - eos_mode - to store the mode used for Equation of State
-        #  - workchain_metadata
-        #  - inputs
-        #  -
-        pass
+        ## Step 1
+        self.ctx.eos = AttributeDict()
+        self.ctx.eos.structure_generation = self.inputs.step_1.structure_generation
+        self.ctx.eos_inputs = AttributeDict()
+
+        self.ctx.eos.inputs.workchain_metadata = self.inputs.workchain_metadata.eos_metadata 
+
+
+        # set up the result and finished flag
+        self.ctx.eos.minimum = None
+        # self.ctx.eos.finished = False #QUESTION - Is a finished flag necessary? doubt it
+
+
+        ## Step 2
+        self.ctx.relax = AttributeDict()
+        self.ctx.relax.inputs = AttributeDict()
+
 
     def _init_inputs(self):
         """
@@ -141,10 +162,98 @@ class VolOptWorkChain(WorkChain):
         except AttributeError:
             pass
 
-        # lastly the outline - what do I have to do?
-        # 1 - prepare step_1 - init step 1 - run step 1 - verify step 1
-        # 2 - prepare step_2 - init step 2 - run step 2 - verify step 2
-        # 3 - finalize the results at the highest level
+    
+    def init_and_run_step_1(self):
+
+        # Check existence of context inputs
+        try:
+            self.ctx.eos.inputs
+        except AttributeError:
+            raise ValueError("No input dictionary was defined in self.ctx.eos.inputs")
+        
+        # set up inputs for step 1
+        self.ctx.eos.inputs.update(self.exposed_inputs(self._step_1_workchain))
+        
+        # Set up structures - #QUESTION - should I check if the parameters supplied contain a mode here again? if I have a validator that should be enough I guess
+        self.report(f"Generating structures for {self._step_1_workchain.__name__} based on Structure {self.ctx.structure.pk} - Mode: {self.ctx.eos.structure_generation.parameters.get_dict().get('mode', 'uniform')}")
+        self.ctx.eos.inputs.structures = generate_eos_structures(self.ctx.structure, self.ctx.eos.structure_generation)
+
+        # run step 1
+        running_eos = self.submit(self._step_1_workchain, **self.ctx.eos.inputs)
+        self.report(f"Launching {self._step_1_workchain.__name__}<{running_eos.pk}>")
+        self.ctx.eos.workchain = running_eos
+
+    
+    def verify_step_1(self):
+
+        # Check if Step 1 WorkChain exists
+        try:
+            workchain = self.ctx.eos.workchain 
+        except NameError:
+            return self.exit_codes.ERROR_NO_CALLED_WORKCHAIN
+        
+        step_1_exit_status = workchain.exit_status
+        step_1_exit_message = workchain.exit_message
+
+        if not step_1_exit_status:
+            self.ctx.exit_code = self.exit_codes.NO_ERROR
+            self.ctx.eos.minimum = workchain.outputs.eos_minimum.get_dict()
+
+        else:
+            self.ctx.exit_code = compose_exit_code(step_1_exit_status, step_1_exit_message)
+            self.report(f"The called {workchain.__class__.__name__}<{workchain.pk}> returned a non-zero exit status.\n The exit status {self.ctx.exit_code} is inherited.")
+            
+        return self.ctx.exit_code
+
+
+    def init_and_run_step_2(self):
+        
+        # Check existence of context inputs
+        try:
+            self.ctx.relax.inputs
+        except AttributeError:
+            raise ValueError("No input dictionary was defined in self.ctx.relax.inputs")
+        
+        # set up inputs for step 2
+        self.ctx.relax.inputs.update(self.exposed_inputs(self._step_2_workchain))
+
+        # Generate predicted Minimum Structure from Step 1
+        eos_min_volume = np.round(self.ctx.eos.minimum.get('volume'), self.ctx.workchain_metadata.volume_precision)
+        self.report(f"Generating predicted minimum structure for {self._step_2_workchain.__name__} based on inital Structure <{self.ctx.structure.pk}>, with Minimum Volume {eos_min_volume} \u213B\u00B3  from {self.ctx.eos.workchain.__class__.__name__} <{self.ctx.eos.workchain.pk}>")
+        eos_relax_structure = self.ctx.structure.get_pymatgen().copy()
+        
+        eos_relax_structure.lattice = eos_relax_structure.lattice.matrix * (eos_min_volume / eos_relax_structure.volume)
+        self.ctx.relax.inputs.structure = DataFactory("core.structure")(pymatgen_structure = eos_relax_structure)
+
+        # run step 2
+        running_relax = self.submit(self._step_2_workchain, **self.ctx.relax.inputs)
+        self.report(f"Launching {self._step_2_workchain.__name__}<{running_relax.pk}>")
+        self.ctx.relax.workchain = running_relax
+
+    def verify_step_2(self):
+        
+        try:
+            workchain = self.ctx.relax.workchain
+        except NameError:
+            return self.exit_codes.ERROR_NO_CALLED_RELAX_WORKCHAIN
+        
+        step_2_exit_status = workchain.exit_status
+        step_2_exit_message = workchain.exit_message
+
+        if not step_2_exit_status:
+            self.ctx.exit_code = self.exit_codes.NO_ERROR
+        else:
+            self.ctx.exit_code = compose_exit_code(step_2_exit_status, step_2_exit_message)
+            self.report(f"The called {workchain.__class__.__name__}<{workchain.pk}> returned a non-zero exit status.\n The exit status {self.ctx.exit_code} is inherited.")
+
+        return self.ctx.exit_code
+
+    def finalize(self):
+        # What do I need to finalize? - is there anything, if I just pass the outputs from the sub workchains?
+        # as outputs I probaly just pass along the outputs of the step 2 workchain?
+
+        # Ooooh a plot - optionally 
+        pass
 
 
         # What should the outputs be? - relaxed structure obviously - anything else? final energy/volume/bulk modulus from step 2?
@@ -153,14 +262,10 @@ class VolOptWorkChain(WorkChain):
 
 
 
-
-
-
-# I don't know if I might require other parameters .. probably - how should they be provided ... I guess as a namespace of structure_generation.mode_parameters
-# @calcfunction
+@calcfunction
 def generate_eos_structures(inp_structure, structure_generation):
     structure = inp_structure.get_pymatgen()
-    parameters = structure_generation.parameters#.get_dict()
+    parameters = structure_generation.parameters.get_dict()
     mode = parameters.pop('mode')
     structure_name = parameters.get('str_name', 'Structure')
 
@@ -186,41 +291,4 @@ def generate_eos_structures(inp_structure, structure_generation):
 
 
 if __name__ == '__main__':
-    workchain = WorkflowFactory('vasp_ext_ml.vol_opt')
-    builder = workchain.get_builder()
-
-    from pymatgen.core.structure import Structure, Lattice
-
-    # Set up structure for testing - hexagonal GaN
-    a = 3.33
-    c_over_a = 1.602
-
-    lat = np.array([
-        [1/2, -np.sqrt(3)/2,         0],
-        [1/2,  np.sqrt(3)/2,         0],
-        [  0,             0,  c_over_a]
-        ])
-
-    basis_pos = np.array([
-        [1/3, 2/3, 0],
-        [2/3, 1/3, 0],
-        [1/3, 2/3, 0],
-        [2/3, 1/3, 0]
-        ])
-    basis_atm = ["Ga", "Ga", "N", "N"]
-    basis = (basis_atm, basis_pos)
-
-    structure = gen_aiida_structure(a, lat, *basis)
-
-
-    # set up builder.
-    struc = structure.get_pymatgen()
-
-    structure_generation = AttributeDict()
-    structure_generation.parameters = {'mode': 'geometric'}
-    structure_generation.max_volume_scaling = 0.1
-    structure_generation.lattice_points = 5
-
-
-    print(structure_generation.max_volume_scaling, structure_generation.parameters)
-    print(generate_eos_structures(structure, structure_generation))
+    pass
