@@ -94,7 +94,7 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
     inputs.settings = dict_data(dict=settings)
     # Workchain related inputs, in this case, give more explicit output to report
     inputs.verbose = Bool(True)
-    
+
     inputs.minimum_mode = Str("Murnaghan")
     # Submit the workchain with the set inputs
 
@@ -107,15 +107,15 @@ def main(code_string, incar, kmesh, structures, potential_family, potential_mapp
     "volume": Bool(False),
     }
 
-    inputs.wc_metadata = AttributeDict()
-    inputs.wc_metadata.create_plot = True
+    inputs.workchain_metadata = AttributeDict()
+    inputs.workchain_metadata.create_plot = True
 
     submit(workchain, **inputs)
 
 
 if __name__ == '__main__':
     # Code_string is chosen among the list given by 'verdi code list'
-    CODE_STRING = 'vasp6@jhpc'
+    CODE_STRING = 'vasp6.4@jhpc'
 
     # INCAR equivalent
     # Set input parameters
@@ -150,4 +150,5 @@ if __name__ == '__main__':
     LATTICE_CONSTANTS = [3.7, 3.8, 3.9, 4.0, 4.1, 4.2]
     STRUCTURES = get_structures(LATTICE_CONSTANTS)
 
-    main(CODE_STRING, INCAR, KMESH, STRUCTURES, POTENTIAL_FAMILY, POTENTIAL_MAPPING, OPTIONS)
+    print(STRUCTURES)
+    # main(CODE_STRING, INCAR, KMESH, STRUCTURES, POTENTIAL_FAMILY, POTENTIAL_MAPPING, OPTIONS)

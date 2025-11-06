@@ -21,7 +21,10 @@ _DEFAULT_K1 = 4.5
 
 """
 todo:
-- Write Tests for the WorkChain and Calcfunctions
+- Write Tests for the WorkChain and Calcfunctions\
+- Deal with Error Handeling 
+    - what happens if one or two calculations for far out values fail - if the energies of values near them are far higher than others anyway I think the calculation should continue, but in the end warn the user what happend
+    - maybe initial test of edgecases -to see if they converge
 
 - Add more minimum determination methods? Birch-Murnaghan, Vinet, etc.
 - Add more plotting options  ... myb but then again I can just modify the created plot after the fact
@@ -232,7 +235,7 @@ class EoSWorkChain(WorkChain):
 
         if self.ctx.workchain_metadata.create_plot:
             self.report("Generating Plot of Equation of State")
-            plot_file = create_plot(total_energies, parameters=analysis_dict["parameters"])
+            plot_file = create_eos_plot(total_energies, parameters=analysis_dict["parameters"])
             self.out('eos_plot', plot_file)
 
 
@@ -311,7 +314,7 @@ def locate_minimum_murnaghan(total_energies):
     min_energy_point = Murnaghan(params[1], *params)
 
     # Store Result
-    dict_data = {'volume': params[0], 'energy': min_energy_point}
+    dict_data = {'volume': params[1], 'energy': min_energy_point}
 
     return {
         "min_energy": Dict(dict = dict_data), 
@@ -321,7 +324,7 @@ def locate_minimum_murnaghan(total_energies):
 
 
 @calcfunction
-def create_plot(total_energies, parameters):
+def create_eos_plot(total_energies, parameters, relaxed_pts=None):
     total_energies_array = total_energies.get_array('eos')
     parameters = parameters.get_dict()
 
@@ -333,6 +336,15 @@ def create_plot(total_energies, parameters):
 
     fig, ax = plt.subplots()
     ax.scatter(volumes, energies)
+
+    if relaxed_pts:
+        ax.scatter(relaxed_pts['volume'], 
+                   relaxed_pts['energy'], 
+                   label = "Relaxed Structure",
+                #    label=relaxed_pts.get("label", "Relaxed Structure"), #QUESTION Can I somehow access the name of the calculation? Probably .. do I need to?
+                   color='green'
+                    )
+
 
     match type:
         case "Murnaghan EoS Fit":
@@ -353,6 +365,7 @@ def create_plot(total_energies, parameters):
 
             ax.set_title("Interpolated EoS Plot")
             ax.plot(x_fit, y_fit(x_fit))
+
 
     ax.axvline(x=v0, color='grey', linestyle='--', label=fr'$V_0 = {v0:.3f}$ $A^3$')
 
