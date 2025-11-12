@@ -7,16 +7,12 @@ from aiida.plugins import DataFactory, WorkflowFactory
 
 from aiida.common.extendeddicts import AttributeDict
 
-from aiida_vasp.workchains.relax import RelaxWorkChain
-
 from aiida_vasp.utils.workchains import prepare_process_inputs
 from aiida_vasp.utils.workchains import compose_exit_code
 
 from aiida_vasp_ext_mlauer.util.functions import powerrange
 from aiida_vasp_ext_mlauer.workflows.eos import create_eos_plot
 from aiida_vasp_ext_mlauer.util.orm import namespace_to_atrdict
-
-load_profile('lauerm-test')
 
 """
 todo:
@@ -355,25 +351,3 @@ def validate_structure_generation_parameters(para_node, port):
 
     else:
         return f"value for key 'type' {mode} is invalid"
-
-
-
-if __name__ == '__main__':
-    pass
-    # from aiida.engine import run
-    # from aiida_vasp_ext_mlauer.util.structures import gen_aiida_structure
-    # LAT_CONST = 3.9 # Angstrom
-    # LATTICE = np.array([[.5, .5, 0], [0, .5, .5], [.5, 0, .5]])
-    # SPECIES = ["Si"]
-    # POSITION = np.array([[0,0,0]])
-
-
-    # inputs = AttributeDict()
-
-    # inputs.inp_structure = gen_aiida_structure(LAT_CONST, LATTICE, SPECIES, POSITION)
-
-    # inputs.parameters = DataFactory("core.dict")(dict={"mode": "uniform"})
-    # inputs.max_volume_scaling = DataFactory("core.float")(0.1)
-    # inputs.lattice_points = DataFactory("core.int")(5)
-
-    # run(generate_eos_structures, **inputs)
