@@ -285,12 +285,9 @@ class VolOptWorkChain(WorkChain):
     def finalize(self):
 
 
-        relaxed_pts = DataFactory("core.dict")(dict={
-            "volume": self.ctx.workchains[1].outputs.relax.structure.get_pymatgen().volume,
-            "energy": self.ctx.workchains[1].outputs.energies.get_array('energy_extrapolated')[0]
-            })
+        relaxed_pts = store_vol_opt_result(self.ctx.workchains[1].outputs.relax.structure.get_pymatgen().volume, self.ctx.workchains[1].outputs.energies.get_array('energy_extrapolated')[0])
 
-        self.out('vol_opt', relaxed_pts)
+        self.out('vol_opt', relaxed_pts) # this is an error source due to provenance ... I don't know why some of them didn't except but now I will have to fix it
 
         # for now I just want to expose some of the outputs of the relaxation workchain, and add the plot (opt)
         if self.ctx.workchain_metadata.create_plot:
@@ -305,6 +302,13 @@ class VolOptWorkChain(WorkChain):
             self.out('vol_opt_plot', plot_file)
 
 
+
+@calcfunction 
+def store_vol_opt_result(volume, energy):
+    return DataFactory("core.dict")(dict={
+            "volume": volume,
+            "energy": energy
+            })
 
 
 @calcfunction
