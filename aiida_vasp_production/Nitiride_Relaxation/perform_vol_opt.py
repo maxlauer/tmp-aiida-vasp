@@ -12,7 +12,6 @@ load_profile('lauerm-prod')
 
 group = load_group('nitride_exploration/blk_materials')
 
-
 def perform_volopt(code_str, structure_pk, parameters, pwcut, kmesh, relax, potential_family, potential_mapping, structure_generation, options):
 
 
@@ -90,9 +89,14 @@ def perform_volopt(code_str, structure_pk, parameters, pwcut, kmesh, relax, pote
 
     inputs.step_2.relax = relax
 
+    # make sure that the remotedir is not cleaned for step_2, so that the CHGCAR can be used for bandstructure calculation
+    inputs.step_2.clean_workdir = Bool(False)
+
 
     node = submit(workchain, **inputs)
     return node
+
+
 
 def restart_failed_vol_opt(process_pk, relax, options):
 
@@ -143,12 +147,12 @@ if __name__ == '__main__':
 
 
     STRUCTURE_PKs = [
-    688, # wz-AlN
-    689, # wz-ScN
-    690, # wz-GaN
-    691, # wz-InN
-    ]
-
+        1186, # wz-AlN
+        1187, # wz-ScN
+        1188, # wz-GaN
+        1189, # wz-InN
+        ]
+    
     STRUCTURE_GENERATION = AttributeDict()
     STRUCTURE_GENERATION.parameters = Dict(dict={"mode": "uniform"})
     STRUCTURE_GENERATION.max_volume_scaling = Float(0.1)
@@ -167,12 +171,11 @@ if __name__ == '__main__':
     }
 
     for STRUCTURE_PK in STRUCTURE_PKs:
-        pass 
-        # node = perform_volopt(CODE_STRING, STRUCTURE_PK, PARAMETERS, PWCUTOFF, KMESH, RELAX, POTENTIAL_FAMILY, POTENTIAL_MAPPING, STRUCTURE_GENERATION, OPTIONS)
+        node = perform_volopt(CODE_STRING, STRUCTURE_PK, PARAMETERS, PWCUTOFF, KMESH, RELAX, POTENTIAL_FAMILY, POTENTIAL_MAPPING, STRUCTURE_GENERATION, OPTIONS)
 
-        # group.add_nodes(node)
-
-    for pk in [4525, 4554, 4626]:
-        node = restart_failed_vol_opt(pk, relax=RELAX, options=OPTIONS)
         group.add_nodes(node)
+
+    # for pk in [4525, 4554, 4626]:
+    #     node = restart_failed_vol_opt(pk, relax=RELAX, options=OPTIONS)
+    #     group.add_nodes(node)
 

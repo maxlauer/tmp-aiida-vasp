@@ -20,7 +20,7 @@ from aiida_vasp.workchains.converge import ConvergeWorkChain
 from aiida_vasp_ext_mlauer.util.jhpc_computer_options import get_jhpc_options
 
 
-load_profile('lauerm-test')
+load_profile('lauerm-prod')
 
 group = load_group('nitride_exploration/blk_materials/convergence')
 
@@ -109,17 +109,16 @@ if __name__ == '__main__':
     OPTIONS = get_jhpc_options(1)
 
     STRUCTURE_PKs = [
-    688, # wz-AlN
-    689, # wz-ScN
-    690, # wz-GaN
-    691, # wz-InN
+    1186, # wz-AlN
+    1187, # wz-ScN
+    1188, # wz-GaN
+    1189, # wz-InN
     ]
 
     for STRUCTURE_PK in STRUCTURE_PKs:
-        pass
-        # node = convergence_test(CODE_STRING, STRUCTURE_PK, PARAMETERS, POTENTIAL_FAMILY, POTENTIAL_MAPPING, OPTIONS)
+        node = convergence_test(CODE_STRING, STRUCTURE_PK, PARAMETERS, POTENTIAL_FAMILY, POTENTIAL_MAPPING, OPTIONS)
 
-        # group.add_nodes(node)
+        group.add_nodes(node)
 
     
     # node = convergence_test(CODE_STRING, 5830, PARAMETERS, POTENTIAL_FAMILY, POTENTIAL_MAPPING, OPTIONS)

@@ -1,0 +1,11 @@
+#
+# N all electron ground state
+   ae      N ground state - all electron
+ n=N  c=hl
+       0.0       0.0       0.0       0.0       0.0       0.0
+    1    2
+    2    0      2.00      0.00
+    2    1      2.50      0.00
+100 maxit
+
+

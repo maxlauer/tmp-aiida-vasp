@@ -1,0 +1,50 @@
+Using LDA-1/2 in VASP
+
+We exemplify with Oxigen.
+1 - Run the program atm_cGuima3.f which is zipped together with its 
+include files in file atm_cGuima3.f.zip. This is the program atm 
+written by S. Froyen, with contributions from Trouillier and Martins. 
+It is free and it is included in the SIESTA package. We made some additions 
+commented with cGuima. We include the compiled version atm_cGuima3.exe 
+to run under Windows but the program can be compiled as well under UNIX.
+We also include the manual atom.pdf. Our version has an extra line in 
+the input INP establishing the maximum number of iterations.
+   First run all-electron for O. The input file is INP.ae and has to be renamed
+to INP. The output files to be saved are OUT, VTOTAL0, and VTOTAL1, renamed
+to OUT.ae, VTOTAL0.ae, VTOTAL1.ae. VTOTAL0 and VTOTAL1 are equal
+and any can be used in what follows.
+   Then remove 0.5 eletrons from the subshell 2p. The new input is INP.ae-05p
+which has to be renamed to INP. The saved files, after renaming, are
+OUT.ae-05p, VTOTAL0.ae-05p and VTOTAL1.ae-05p.
+2 - Compile the program add2POTCAR-eng.f90 that will add the self-energy
+potential to the local part of POTCAR to generate a modified POTCAR.
+This program is compiled for Windows (add2POTCAR-eng.exe) but may be
+compiled in any OS.
+3 - The output is add2POTCAR.out, and except for the first line, it coincides
+with the input IN. The execution begins by asking what is the name of
+the input file. If * then the program will read the data from the 
+screen. In our case the input file was named IN.
+4 - Then it reads the name of the file where are the radii. In our case
+VTOTAL1.ae. Then it reads the number of lines that are jumped to begin
+reading the radial net, and the number of points in the radial net. In
+our case, it JUMPS just one line and there are 1029 points in the
+radial net.
+5 - Then it reads the name of the file with potential of the neutal 
+atom (VTOTAL1.ae).
+6 - Then reads how many lines have to be jumped to begin reading
+the potential.
+7 - Then it reads the name of the file with potential of the -1/2 ion 
+(VTOTAL1.ae-05p).
+8 - Then reads how many lines have to be jumped to begin reading
+the potential.
+9 - Then it reads the parameters of the cutting function (n,CUT,amplitude).
+amplitude is always 1.
+10 - Reads the name of the POTCAR file.
+11 - Reads JUMPS, which is the number of lines to be read till it reaches
+the local part and reads the number of k's.
+12 - Reads the name of the new POTCAR
+13 - Format used to read/write the maximum k
+14 - Format to read/write V(k)
+
+Good luck, and do not forget to cite PRB 78, 125116 (2008).
+

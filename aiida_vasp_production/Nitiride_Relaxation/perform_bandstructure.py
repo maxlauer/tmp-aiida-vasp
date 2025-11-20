@@ -6,103 +6,216 @@ from aiida.engine import submit
 from aiida.common.extendeddicts import AttributeDict
 from aiida.plugins import WorkflowFactory
 
+from aiida_vasp.workchains.bands import BandsWorkChain
+
+
 from aiida_vasp_ext_mlauer.util.jhpc_computer_options import get_jhpc_options
-from aiida_vasp_ext_mlauer.workflows.vol_opt import VolOptWorkChain
 
 load_profile('lauerm-prod')
 
-group = load_group('nitride_exploration/blk_materials')
+group = load_group('nitride_exploration/blk_materials/lda_half')
 
+def perform_inital_os(code_str, structure, parameters, pwcut, kmesh, potential_family, potential_mapping, options):
 
-def perform_initial_vasp_calc(code_str, structure_pk, parameters, pwcut, kmesh, potential_family, potential_mapping, options):
-
-
-    # load nodes
-    code = load_code(code_str)
-    structure = load_node(structure_pk)
-
-    workchain = WorkflowFactory('vasp.vasp')
-    
-
-    # Set Up Settings
-    settings = AttributeDict()
-
-    # make copy of parameters and insert encut
+    # adjust parameters
     parameters = parameters.copy()
     parameters["incar"].update({"encut": pwcut})
+    # prepare kpoints
+    kpoints = KpointsData()
+    kpoints.set_kpoints_mesh(kmesh)
 
 
-    # set up inputs
+    code = load_code(code_str)
+    workchain = WorkflowFactory('vasp.vasp')
+
+    settings = AttributeDict()
     inputs = AttributeDict()
 
-    # General
-    inputs.structure = structure 
-    
-    inputs.kpoints = KpointsData()
-    inputs.kpoints.set_kpoints_mesh(kmesh)
+    inputs.code = code
 
+    inputs.structure = structure
 
+    inputs.parameters = parameters
+    inputs.kpoints = kpoints
+
+    inputs.potential_family = Str(potential_family)
+    inputs.potential_mapping = Dict(dict=potential_mapping)
+
+    inputs.options = Dict(dict=options)
+
+    inputs.settings = Dict(dict=settings)
 
     node = submit(workchain, **inputs)
     return node
 
 
+def perform_vasp_bands_workchain(code_str, restart_folder, structure, parameters, pwcut, kmesh, potential_family, potential_mapping, options):
+
+
+    # load nodes
+    code = load_code(code_str)
+
+    workchain =BandsWorkChain
+
+
+    # Set Up Settings
+    settings = AttributeDict()
+    settings.parser_settings = {
+        "add_fermi_level": True     # I think this doesn't do anything ...
+    }
+
+    # set up inputs
+    inputs = AttributeDict()
+    inputs.smearing = AttributeDict()
+    inputs.bands = AttributeDict()
+
+    # set up code
+    inputs.code = code
+
+    # Structure Setup
+    inputs.structure = structure
+
+    # set up parameters - not necessary - therefore I will not use it and instead leave it (probably takes parameters from restart_folder)
+    # no it doesn't take it from restart .. .this is fishy, I will set it explicitly
+    # make copy of parameters and insert encut
+    parameters = parameters.copy()
+    parameters["incar"].update({"encut": pwcut})
+
+    inputs.parameters = parameters
+
+    # k-points setup
+    inputs.kpoints = KpointsData()
+    inputs.kpoints.set_kpoints_mesh(kmesh)
+
+
+    # POTCAR setup
+    inputs.potential_family = Str(potential_family)
+    inputs.potential_mapping = Dict(dict=potential_mapping)
+
+    inputs.options = Dict(dict=options)
+
+    inputs.settings = Dict(dict=settings)
+
+
+    # Band specific inputs
+    inputs.restart_folder = restart_folder
+
+    # smearing inputs
+    inputs.smearing.gaussian = Bool(True)
+    inputs.smearing.sigma = Float(0.05)
+
+    node = submit(workchain, **inputs)
+    return node
+
+
+def perform_bands_calculation():
+    pass
+
+
+
 if __name__ == '__main__':
     CODE_STRING = "vasp6.4@jhpc"
 
-    PARAMETERS = AttributeDict()
-    PARAMETERS.vasp = {
-        'incar': {
-            "istart": 0,
-            "icharg": 2,
-            "ismear": -5,
-            "gga": "PS"
-            }}
-    
-    PARAMETERS.band = {
-        'incar': {
-            "istart": 0,
-            "icharg": 2,
-            "ismear": -5,
-            "gga": "PS"
-            }}
+    PARAMETERS = {
+            'incar': {
+                "istart": 0,
+                "icharg": 2,
+                "gga": "HL"
+                }}
 
-    POTENTIAL_FAMILY = "PBE.64"
+    PARAMETERS_INITIAL = {
+        'incar': {
+            'istart': 0,
+            'icharg': 2,
+            'gga': "HL"
+        }
+    }
+
+    POTENTIAL_FAMILY = "LDA-05.64"
     POTENTIAL_MAPPING = {
         "Al": "Al",
         "Sc": "Sc",
         "Ga": "Ga",
         "In": "In",
-        "N": "N"
+        "N": "N_05"
                          }
-    
-    OPTIONS = AttributeDict()
-    OPTIONS.step_1 = get_jhpc_options(1, 'debug')
-    OPTIONS.step_2 = get_jhpc_options(1, 'debug')
+
+    OPTIONS = get_jhpc_options(1, 'debug')
 
 
-    STRUCTURE_PKs = [
-    688, # wz-AlN
-    689, # wz-ScN
-    690, # wz-GaN
-    691, # wz-InN
+    VOL_OPT_PKs = [
+        1227, # wz-AlN
+        1256, # wz-ScN
+        1292, # wz-GaN
+        1328, # wz-InN
     ]
 
-    STRUCTURE_GENERATION = AttributeDict()
-    STRUCTURE_GENERATION.parameters = Dict(dict={"mode": "uniform"})
-    STRUCTURE_GENERATION.max_volume_scaling = Float(0.1)
-    STRUCTURE_GENERATION.lattice_points = Int(5)
+    INITAL_VASP_PKs = [
+        1806, # wz-AlN
+        1863, # wz-ScN
+        1828, # wz-GaN
+        1838, # wz-InN
+    ]
 
     KMESH = [10, 10, 6]
     PWCUTOFF = 550
 
-    for STRUCTURE_PK in STRUCTURE_PKs:
-        pass 
-        # node = perform_volopt(CODE_STRING, STRUCTURE_PK, PARAMETERS, PWCUTOFF, KMESH, RELAX, POTENTIAL_FAMILY, POTENTIAL_MAPPING, STRUCTURE_GENERATION, OPTIONS)
+    for idx in range(len(VOL_OPT_PKs)):
+        if INITAL_VASP_PKs[idx] is not None:
+            continue
 
-        # group.add_nodes(node)
+        wc_pk = VOL_OPT_PKs[idx]
+        wc = load_node(wc_pk)
+        relax_wc = [sub_wc for sub_wc in wc.called if sub_wc.process_label == 'RelaxWorkChain'][-1]
 
-    for pk in [4525, 4554, 4626]:
-        node = restart_failed_vol_opt(pk, relax=RELAX, options=OPTIONS)
+        relaxed_str = relax_wc.outputs.relax.structure
+        remote_folder = relax_wc.outputs.remote_folder
+
+        node = perform_inital_os(
+            code_str=CODE_STRING,
+            structure=relaxed_str,
+            parameters=PARAMETERS,
+            pwcut=PWCUTOFF,
+            kmesh=KMESH,
+            potential_family=POTENTIAL_FAMILY,
+            potential_mapping=POTENTIAL_MAPPING,
+            options=OPTIONS
+        )
+
         group.add_nodes(node)
+
+
+    for idx in range(len(INITAL_VASP_PKs)):
+
+        if INITAL_VASP_PKs[idx] is None:
+            continue
+
+        vol_opt_wc_pk = VOL_OPT_PKs[idx]
+        init_wc_pk = INITAL_VASP_PKs[idx]
+
+        vol_opt_wc = load_node(vol_opt_wc_pk)
+        init_wc = load_node(init_wc_pk)
+
+        relax_wc = [sub_wc for sub_wc in vol_opt_wc.called if sub_wc.process_label == 'RelaxWorkChain'][-1]
+
+        relaxed_str = relax_wc.outputs.relax.structure
+        remote_folder = init_wc.outputs.remote_folder
+
+        node = perform_vasp_bands_workchain(
+            code_str=CODE_STRING,
+            restart_folder=remote_folder,
+            structure=relaxed_str,
+            parameters=PARAMETERS,
+            pwcut=PWCUTOFF,
+            kmesh=KMESH,
+            potential_family=POTENTIAL_FAMILY,
+            potential_mapping=POTENTIAL_MAPPING,
+            options=OPTIONS
+        )
+
+        group.add_nodes(node)
+
+
+
+
 

@@ -1,0 +1,12 @@
+VTOTAL.ae           = file of radii
+    1 1018 = JUMPS,nupon
+VTOTAL.ae           = atomic potential file
+  258 = JUMPS
+VTOTAL.ae-05        = -1/2 ionic potential file
+  258 = JUMPS
+   8  2.670000  1.000000 = n   CUT  amplitude
+POTCAR               = POTCAR file
+   61 1000 = JUMPS, number of k's
+POTCARnew            =  POTCARnew file
+(f20.15)                                 = format of Kmax in file POTCAR
+(5e16.8)                                 = format of V(k) in file POTCAR
