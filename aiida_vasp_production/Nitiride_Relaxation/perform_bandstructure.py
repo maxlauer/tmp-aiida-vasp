@@ -45,6 +45,9 @@ def perform_inital_os(code_str, structure, parameters, pwcut, kmesh, potential_f
 
     inputs.settings = Dict(dict=settings)
 
+    # make sure that the remotedir is not cleaned for step_2, so that the CHGCAR can be used for bandstructure calculation
+    inputs.clean_workdir = Bool(False)
+
     node = submit(workchain, **inputs)
     return node
 
@@ -127,7 +130,7 @@ if __name__ == '__main__':
         'incar': {
             'istart': 0,
             'icharg': 2,
-            'gga': "HL"
+            'gga': "CA"
         }
     }
 
@@ -151,10 +154,10 @@ if __name__ == '__main__':
     ]
 
     INITAL_VASP_PKs = [
-        1806, # wz-AlN
-        1863, # wz-ScN
-        1828, # wz-GaN
-        1838, # wz-InN
+        2405, # wz-AlN
+        2415, # wz-ScN
+        2427, # wz-GaN
+        2437, # wz-InN
     ]
 
     KMESH = [10, 10, 6]

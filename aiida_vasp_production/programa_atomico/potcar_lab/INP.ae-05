@@ -1,7 +1,7 @@
 #
 # N all electron ground state
    ae      N ground state - all electron
- n=N  c=hl
+ n=N  c=ca
        0.0       0.0       0.0       0.0       0.0       0.0
     1    2
     2    0      2.00      0.00
